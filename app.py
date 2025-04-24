@@ -3,139 +3,104 @@ import streamlit as st
 import base64
 from openai import OpenAI
 import openai
-#from PIL import Image
-import tensorflow as tf
-from PIL import Image, ImageOps
+from PIL import Image
 import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
-import streamlit as st
 from streamlit_drawable_canvas import st_canvas
 
-Expert=" "
-profile_imgenh=" "
-    
-def encode_image_to_base64(image_path):
-    try:
-        with open(image_path, "rb") as image_file:
-            encoded_image = base64.b64encode(image_file.read()).decode("utf-8")
-            return encoded_image
-    except FileNotFoundError:
-        return "Error: La imagen no se encontró en la ruta especificada."
+# Estilos base
+st.set_page_config(page_title='🎨 Tablero Inteligente', layout="centered", page_icon="🧠")
 
-
-# Streamlit 
-st.set_page_config(page_title='Tablero Inteligente')
-st.title('Tablero Inteligente')
+# --- Sidebar ---
 with st.sidebar:
-    st.subheader("Acerca de:")
-    st.subheader("En esta aplicación veremos la capacidad que ahora tiene una máquina de interpretar un boceto")
-st.subheader("Dibuja el boceto en el panel  y presiona el botón para analizarla")
+    st.markdown("## 🤖 Acerca de la App")
+    st.info("Esta aplicación permite a una IA interpretar un dibujo hecho a mano. Solo dibuja en el panel y presiona **'Analizar Imagen'**.")
+    st.markdown("---")
+    stroke_width = st.slider('✏️ Ancho de la línea', 1, 30, 5)
+    st.markdown("Puedes usar el panel principal para dibujar 👇")
 
-# Add canvas component
-#bg_image = st.sidebar.file_uploader("Cargar Imagen:", type=["png", "jpg"])
-# Specify canvas parameters in application
-drawing_mode = "freedraw"
-stroke_width = st.sidebar.slider('Selecciona el ancho de línea', 1, 30, 5)
-#stroke_color = '#FFFFFF' # Set background color to white
-#bg_color = '#000000'
-stroke_color = "#000000" 
-bg_color = '#FFFFFF'
-#realtime_update = st.sidebar.checkbox("Update in realtime", True)
+# --- Encabezado con animación y estilo ---
+st.markdown("""
+    <h1 style='text-align: center; color: #4A90E2;'>🧠 Tablero Inteligente</h1>
+    <p style='text-align: center; color: #555;'>Dibuja tu idea y deja que la IA lo interprete</p>
+""", unsafe_allow_html=True)
 
-
-# Create a canvas component
+# --- Canvas para dibujo ---
 canvas_result = st_canvas(
-    fill_color="rgba(255, 165, 0, 0.3)",  # Fixed fill color with some opacity
+    fill_color="rgba(255,165,0,0.3)",
     stroke_width=stroke_width,
-    stroke_color=stroke_color,
-    background_color=bg_color,
-    height=300,
-    width=400,
-    #background_image= None #Image.open(bg_image) if bg_image else None,
-    drawing_mode=drawing_mode,
+    stroke_color="#000000",
+    background_color="#FFFFFF",
+    height=350,
+    width=450,
+    drawing_mode="freedraw",
     key="canvas",
 )
 
-ke = st.text_input('Ingresa tu Clave')
-#os.environ['OPENAI_API_KEY'] = st.secrets['OPENAI_API_KEY']
-os.environ['OPENAI_API_KEY'] = ke
-
-
-# Retrieve the OpenAI API Key from secrets
+# --- Entrada de clave API ---
+st.markdown("### 🔐 Ingresa tu clave de OpenAI")
+api_input = st.text_input('Clave API', type='password')
+os.environ['OPENAI_API_KEY'] = api_input
 api_key = os.environ['OPENAI_API_KEY']
-
-# Initialize the OpenAI client with the API key
 client = OpenAI(api_key=api_key)
 
-analyze_button = st.button("Analiza la imagen", type="secondary")
+# --- Botón con estilo moderno ---
+analyze_button = st.button("🧪 Analizar Imagen", use_container_width=True)
 
-# Check if an image has been uploaded, if the API key is available, and if the button has been pressed
+# --- Función de codificación ---
+def encode_image_to_base64(image_path):
+    try:
+        with open(image_path, "rb") as image_file:
+            encoded = base64.b64encode(image_file.read()).decode("utf-8")
+            return encoded
+    except FileNotFoundError:
+        return None
+
+# --- Lógica de análisis ---
 if canvas_result.image_data is not None and api_key and analyze_button:
+    with st.spinner("🔍 Analizando imagen..."):
+        input_array = np.array(canvas_result.image_data)
+        img = Image.fromarray(input_array.astype('uint8'), 'RGBA')
+        img.save("img.png")
 
-    with st.spinner("Analizando ..."):
-        # Encode the image
-        input_numpy_array = np.array(canvas_result.image_data)
-        input_image = Image.fromarray(input_numpy_array.astype('uint8'),'RGBA')
-        input_image.save('img.png')
-        
-      # Codificar la imagen en base64
- 
         base64_image = encode_image_to_base64("img.png")
-            
-        prompt_text = (f"Describe in spanish briefly the image")
-    
-      # Create the payload for the completion request
-        messages = [
-            {
+        if base64_image is None:
+            st.error("❌ Error al procesar la imagen.")
+        else:
+            prompt_text = "Describe en español brevemente la imagen"
+            messages = [{
                 "role": "user",
                 "content": [
                     {"type": "text", "text": prompt_text},
                     {
                         "type": "image_url",
-                        "image_url":f"data:image/png;base64,{base64_image}",
+                        "image_url": {
+                            "url": f"data:image/png;base64,{base64_image}",
+                        },
                     },
                 ],
-            }
-        ]
-    
-        # Make the request to the OpenAI API
-        try:
-            full_response = ""
-            message_placeholder = st.empty()
-            response = openai.chat.completions.create(
-              model= "gpt-4o-mini",  #o1-preview ,gpt-4o-mini
-              messages=[
-                {
-                   "role": "user",
-                   "content": [
-                     {"type": "text", "text": prompt_text},
-                     {
-                       "type": "image_url",
-                       "image_url": {
-                         "url": f"data:image/png;base64,{base64_image}",
-                       },
-                     },
-                   ],
-                  }
-                ],
-              max_tokens=500,
-              )
-            #response.choices[0].message.content
-            if response.choices[0].message.content is not None:
-                    full_response += response.choices[0].message.content
-                    message_placeholder.markdown(full_response + "▌")
-            # Final update to placeholder after the stream ends
-            message_placeholder.markdown(full_response)
-            if Expert== profile_imgenh:
-               st.session_state.mi_respuesta= response.choices[0].message.content #full_response 
-    
-            # Display the response in the app
-            #st.write(response.choices[0])
-        except Exception as e:
-            st.error(f"An error occurred: {e}")
-else:
-    # Warnings for user action required
+            }]
 
+            try:
+                message_placeholder = st.empty()
+                response = openai.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=messages,
+                    max_tokens=500,
+                )
+
+                content = response.choices[0].message.content
+                message_placeholder.markdown(f"### 📌 Resultado:\n{content}")
+
+            except Exception as e:
+                st.error(f"⚠️ Ocurrió un error al procesar la imagen: {e}")
+
+elif analyze_button and (canvas_result.image_data is None or not api_key):
     if not api_key:
-        st.warning("Por favor ingresa tu API key.")
+        st.warning("🔑 Debes ingresar tu clave de API antes de continuar.")
+    if canvas_result.image_data is None:
+        st.warning("🖼️ No has dibujado nada en el panel.")
+
+# Pie de página
+st.markdown("<hr>", unsafe_allow_html=True)
+st.caption("Desarrollado con 💙 usando Streamlit, OpenAI y mucho cariño.")
+
