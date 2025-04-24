@@ -7,100 +7,93 @@ from PIL import Image
 import numpy as np
 from streamlit_drawable_canvas import st_canvas
 
-# Estilos base
-st.set_page_config(page_title='🎨 Tablero Inteligente', layout="centered", page_icon="🧠")
-
-# --- Sidebar ---
-with st.sidebar:
-    st.markdown("## 🤖 Acerca de la App")
-    st.info("Esta aplicación permite a una IA interpretar un dibujo hecho a mano. Solo dibuja en el panel y presiona **'Analizar Imagen'**.")
-    st.markdown("---")
-    stroke_width = st.slider('✏️ Ancho de la línea', 1, 30, 5)
-    st.markdown("Puedes usar el panel principal para dibujar 👇")
-
-# --- Encabezado con animación y estilo ---
-st.markdown("""
-    <h1 style='text-align: center; color: #4A90E2;'>🧠 Tablero Inteligente</h1>
-    <p style='text-align: center; color: #555;'>Dibuja tu idea y deja que la IA lo interprete</p>
-""", unsafe_allow_html=True)
-
-# --- Canvas para dibujo ---
-canvas_result = st_canvas(
-    fill_color="rgba(255,165,0,0.3)",
-    stroke_width=stroke_width,
-    stroke_color="#000000",
-    background_color="#FFFFFF",
-    height=350,
-    width=450,
-    drawing_mode="freedraw",
-    key="canvas",
-)
-
-# --- Entrada de clave API ---
-st.markdown("### 🔐 Ingresa tu clave de OpenAI")
-api_input = st.text_input('Clave API', type='password')
-os.environ['OPENAI_API_KEY'] = api_input
-api_key = os.environ['OPENAI_API_KEY']
-client = OpenAI(api_key=api_key)
-
-# --- Botón con estilo moderno ---
-analyze_button = st.button("🧪 Analizar Imagen", use_container_width=True)
-
-# --- Función de codificación ---
+# 💖 Función para codificar la imagen
 def encode_image_to_base64(image_path):
     try:
         with open(image_path, "rb") as image_file:
-            encoded = base64.b64encode(image_file.read()).decode("utf-8")
-            return encoded
+            encoded_image = base64.b64encode(image_file.read()).decode("utf-8")
+            return encoded_image
     except FileNotFoundError:
-        return None
+        return "¡Oops! Imagen no encontrada 💔"
 
-# --- Lógica de análisis ---
+# 🎨 Configuración de la página
+st.set_page_config(page_title='🪄 Tablero Mágico', page_icon="🎀")
+st.title('🧚‍♀️ Bienvenida al Tablero Mágico de Dibujos Inteligentes ✨')
+
+# 🧁 Sidebar adorable
+with st.sidebar:
+    st.header("🌸 Acerca de esta app")
+    st.write("Este es un espacio mágico donde tu dibujo será interpretado por una IA 🧠✨. ¡Exprésate y observa cómo la tecnología lo comprende!")
+    st.markdown("---")
+    st.subheader("🎨 Opciones del pincel")
+    stroke_width = st.slider('Grosor del pincel 🖌️', 1, 30, 5)
+    stroke_color = st.color_picker("Color del trazo 🌈", "#000000")
+    bg_base_color = st.color_picker("Color de fondo 🎀", "#FFFFFF")
+    bg_opacity = st.slider("Transparencia del fondo 🌫️", 0.0, 1.0, 1.0, 0.05)
+
+# 🌟 Convertir HEX a RGBA
+def hex_to_rgba(hex_color, alpha):
+    hex_color = hex_color.lstrip('#')
+    r, g, b = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+    return f"rgba({r}, {g}, {b}, {alpha})"
+
+bg_color = hex_to_rgba(bg_base_color, bg_opacity)
+
+# 🖼️ Área de dibujo
+st.subheader("🎀 ¡Dibuja algo mágico y haz clic en analizar! 🪄")
+canvas_result = st_canvas(
+    fill_color="rgba(255, 182, 193, 0.4)",  # rosado pastel con transparencia
+    stroke_width=stroke_width,
+    stroke_color=stroke_color,
+    background_color=bg_color,
+    height=300,
+    width=400,
+    drawing_mode="freedraw",
+    key="canvas_cute"
+)
+
+# 🔐 Ingreso de clave API
+ke = st.text_input('🔑 Ingresa tu clave mágica (API Key)', type='password')
+os.environ['OPENAI_API_KEY'] = ke
+api_key = os.environ.get('OPENAI_API_KEY')
+
+# 🧠 Botón para analizar
+analyze_button = st.button("🔍 Analiza mi dibujo ✨", type="primary")
+
 if canvas_result.image_data is not None and api_key and analyze_button:
-    with st.spinner("🔍 Analizando imagen..."):
-        input_array = np.array(canvas_result.image_data)
-        img = Image.fromarray(input_array.astype('uint8'), 'RGBA')
-        img.save("img.png")
+    with st.spinner("✨ Analizando tu obra de arte... espera un momento 🪄"):
+        input_numpy_array = np.array(canvas_result.image_data)
+        input_image = Image.fromarray(input_numpy_array.astype('uint8'),'RGBA')
+        input_image.save('img.png')
 
         base64_image = encode_image_to_base64("img.png")
-        if base64_image is None:
-            st.error("❌ Error al procesar la imagen.")
-        else:
-            prompt_text = "Describe en español brevemente la imagen"
-            messages = [{
-                "role": "user",
-                "content": [
+        prompt_text = "Describe en español brevemente la imagen"
+
+        try:
+            message_placeholder = st.empty()
+            response = openai.chat.completions.create(
+              model="gpt-4o-mini",
+              messages=[
+                {
+                  "role": "user",
+                  "content": [
                     {"type": "text", "text": prompt_text},
                     {
-                        "type": "image_url",
-                        "image_url": {
-                            "url": f"data:image/png;base64,{base64_image}",
-                        },
+                      "type": "image_url",
+                      "image_url": {"url": f"data:image/png;base64,{base64_image}"},
                     },
-                ],
-            }]
+                  ],
+                }
+              ],
+              max_tokens=500,
+            )
 
-            try:
-                message_placeholder = st.empty()
-                response = openai.chat.completions.create(
-                    model="gpt-4o-mini",
-                    messages=messages,
-                    max_tokens=500,
-                )
+            full_response = response.choices[0].message.content
+            message_placeholder.markdown("📝 *Respuesta mágica de la IA:*\n\n" + full_response)
 
-                content = response.choices[0].message.content
-                message_placeholder.markdown(f"### 📌 Resultado:\n{content}")
-
-            except Exception as e:
-                st.error(f"⚠️ Ocurrió un error al procesar la imagen: {e}")
-
-elif analyze_button and (canvas_result.image_data is None or not api_key):
+        except Exception as e:
+            st.error(f"🚨 ¡Algo salió mal!: {e}")
+else:
     if not api_key:
-        st.warning("🔑 Debes ingresar tu clave de API antes de continuar.")
-    if canvas_result.image_data is None:
-        st.warning("🖼️ No has dibujado nada en el panel.")
-
-# Pie de página
-st.markdown("<hr>", unsafe_allow_html=True)
-st.caption("Desarrollado con 💙 usando Streamlit, OpenAI y mucho cariño.")
+        st.warning("🔐 Por favor ingresa tu clave mágica (API Key) para continuar.")
 
